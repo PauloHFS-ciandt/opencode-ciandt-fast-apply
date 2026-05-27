@@ -19,7 +19,7 @@ Add to your `~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-ciandt-fast-apply"]
+  "plugin": ["github:PauloHFS-ciandt/opencode-ciandt-fast-apply"]
 }
 ```
 
