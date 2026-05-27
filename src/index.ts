@@ -9,7 +9,7 @@ const READONLY_AGENTS = ["plan", "explore"]
 const PROXY_URL = process.env.FLOW_LITELLM_PROXY
   ?? "https://flow.ciandt.com/flow-llm-proxy"
 const API_KEY = process.env.FLOW_API_KEY ?? ""
-const MODEL = process.env.FAST_APPLY_MODEL ?? "gpt-5.1"
+const MODEL = process.env.FAST_APPLY_MODEL ?? "anthropic.claude-4-5-haiku"
 const ENABLED = process.env.FAST_APPLY_ENABLED !== "false"
 
 const MERGE_SYSTEM_PROMPT = `You are a code merge specialist. You receive an original file and a partial edit that uses "${EXISTING_CODE_MARKER}" markers to represent unchanged sections.
