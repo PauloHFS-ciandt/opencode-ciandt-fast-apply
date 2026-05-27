@@ -1,0 +1,6 @@
+{
+  "name": "edit-at-boundaries",
+  "description": "40 lines, edits at first and last lines — no leading marker, no trailing marker",
+  "instructions": "Add logger import at the top, change export default from the class itself to a singleton instance",
+  "type": "fast-apply"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "large-complex",
+  "description": "200+ lines, 5 edits — import addition, transaction wrap, redis cache, soft-delete, scattered markers",
+  "instructions": "Add redis import, wrap createOrder in transaction with distributed lock, add Redis caching to getOrder, change deleteOrder to soft-delete",
+  "type": "fast-apply"
+}

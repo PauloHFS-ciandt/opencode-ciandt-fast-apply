@@ -1,0 +1,6 @@
+{
+  "name": "adjacent-edits",
+  "description": "50 lines, 2 edits on consecutive functions — single trailing marker, no gap between changed functions",
+  "instructions": "Add upper-bound range check to validateAge, add max-length check to validateName",
+  "type": "fast-apply"
+}

@@ -1,0 +1,39 @@
+## Conversation Summary
+
+### Task
+Investigate and fix intermittent 500 errors ("connection pool exhausted") on the checkout endpoint during peak hours.
+
+### Files Analyzed
+- `src/orders/OrderService.ts` — primary fix applied here
+- `src/orders/OrderController.ts` — reviewed; no changes needed
+- `src/shared/database.ts` — connection pool config reviewed (no changes yet)
+- `src/inventory/InventoryService.ts` and `src/payment/PaymentService.ts` — referenced as external HTTP clients
+
+### Connection Pool Configuration (src/shared/database.ts)
+- `min: 5`, `max: 20`
+- `acquire: 30000ms`, `idle: 10000ms`
+
+### Root Cause
+In `OrderService.createOrder`, two external HTTP calls — `inventoryService.reserveItems()` and `paymentService.charge()` — were executing *inside* an open database transaction. Each in-flight checkout held a PostgreSQL connection for the full duration of those HTTP calls (~500ms + ~800ms = ~1300ms+). With `max: 20` pool connections, roughly 20 concurrent checkouts during peak hours exhausted the pool. Subsequent requests waited up to `acquire: 30000ms` before failing. No `rollback()` existed on error, causing leaked connections until PostgreSQL's idle timeout cleaned them up.
+
+### Fix Applied (src/orders/OrderService.ts)
+- Moved `inventoryService.reserveItems()` and `paymentService.charge()` to execute **before** opening the transaction.
+- The transaction now contains only fast local DB writes (INSERT order, bulk INSERT items, UPDATE status), holding a connection for ~10-15ms instead of ~1300ms.
+- Added `try/catch/finally` with `transaction.rollback()` on failure to prevent connection leaks.
+
+### Flow After Fix
+```
+HTTP inventoryService    (no connection held)
+HTTP paymentService      (no connection held)
+open transaction
+  INSERT order           (~5ms, connection held)
+  INSERT order items     (~5ms, connection held)
+  UPDATE order status    (~5ms, connection held)
+commit / rollback
+```
+
+### Remaining Work (not yet implemented)
+1. **Retry logic** — add exponential backoff retries on `inventoryService.reserveItems()` and `paymentService.charge()` for transient failures.
+2. **Circuit breaker** — wrap both external service clients to fail fast when a downstream service is degraded.
+3. **Increase pool size** — evaluate raising `max` from 20 to ~50; tune `acquire` timeout to match.
+4. **Monitoring** — add metrics for active transaction duration and pool utilization; alert before pool exhaustion reaches users.

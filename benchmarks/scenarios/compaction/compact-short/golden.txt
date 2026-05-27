@@ -1,0 +1,25 @@
+## Conversation Summary
+
+### Task
+Fix authentication bug causing users to log in with incorrect credentials.
+
+### Files Modified
+- `src/auth/login.ts` — only file changed
+
+### Root Cause
+At line 23, `validateCredentials(user, password)` was called without `await`. Because `validateCredentials` is an `async` function, the call returned a `Promise` object. A non-null object is always truthy, so `!isValid` was always `false` and the password check was never enforced — any password was accepted.
+
+### Fix Applied
+Added `await` to the call at line 23:
+```
+- const isValid = validateCredentials(user, password);
++ const isValid = await validateCredentials(user, password);
+```
+
+### Current Status
+- Fix has been applied to `src/auth/login.ts`.
+- Tests have NOT been run yet.
+
+### Next Steps
+- Run the auth test suite: `npm test -- --testPathPattern=src/auth`
+- Verify no regression in login and session creation flows.

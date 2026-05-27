@@ -1,0 +1,6 @@
+{
+  "name": "medium-scattered",
+  "description": "80 lines, 3 scattered edits — multi-marker",
+  "instructions": "Add UUID validation, timestamp to response, soft-delete with audit",
+  "type": "fast-apply"
+}

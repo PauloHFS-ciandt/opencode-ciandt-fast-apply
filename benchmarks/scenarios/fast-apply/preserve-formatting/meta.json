@@ -1,0 +1,6 @@
+{
+  "name": "preserve-formatting",
+  "description": "60 lines, mixed tabs/spaces/4-space indent — 1 method edit, all surrounding whitespace must be preserved exactly",
+  "instructions": "Change the return statement of the get method to use nullish coalescing for the undefined fallback",
+  "type": "fast-apply"
+}

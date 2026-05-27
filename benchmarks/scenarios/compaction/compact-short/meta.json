@@ -1,0 +1,11 @@
+{
+  "name": "compact-short",
+  "description": "Simple bug fix conversation, ~2000 tokens, 3 tool calls",
+  "type": "compaction",
+  "checks": {
+    "must_have": ["src/auth/login.ts", "await", "validateCredentials", "test"],
+    "preserve_paths": ["src/auth/login.ts"],
+    "preserve_decisions": ["added await"],
+    "preserve_next_steps": ["run tests"]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "small-single",
+  "description": "30 lines, 1 edit point — baseline",
+  "instructions": "Add division by zero guard to divide function",
+  "type": "fast-apply"
+}

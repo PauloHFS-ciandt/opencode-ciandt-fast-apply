@@ -1,0 +1,11 @@
+{
+  "name": "compact-long",
+  "description": "Complex debugging session, ~5000 tokens, 5 tool calls, multi-file analysis",
+  "type": "compaction",
+  "checks": {
+    "must_have": ["src/orders/OrderService.ts", "src/orders/OrderController.ts", "src/shared/database.ts", "transaction", "connection pool", "rollback", "retry", "circuit breaker"],
+    "preserve_paths": ["src/orders/OrderService.ts", "src/orders/OrderController.ts", "src/shared/database.ts"],
+    "preserve_decisions": ["moved external calls outside transaction", "added rollback"],
+    "preserve_next_steps": ["retry logic", "circuit breaker", "pool size", "monitoring"]
+  }
+}

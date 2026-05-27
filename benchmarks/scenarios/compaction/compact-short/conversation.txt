@@ -1,0 +1,91 @@
+User: There's a bug in the login function — users occasionally get logged in with wrong credentials. Can you look at the auth code and fix it?
+
+Agent: Sure, let me search for the login function first.
+
+[Tool: grep]
+Pattern: "validateCredentials\|loginUser\|async login"
+Path: src/
+---
+src/auth/login.ts:8:export async function loginUser(email: string, password: string): Promise<User | null> {
+src/auth/login.ts:23:  const isValid = validateCredentials(user, password);
+src/auth/login.ts:31:  return user;
+src/auth/middleware.ts:14:  const user = await loginUser(req.body.email, req.body.password);
+src/auth/middleware.ts:19:  req.user = user;
+
+Agent: Found it. Let me read the login file.
+
+[Tool: read_file]
+Path: src/auth/login.ts
+---
+ 1  import { db } from '../shared/database';
+ 2  import { hashPassword, comparePassword } from '../shared/crypto';
+ 3  import { User } from '../models/User';
+ 4  import { logger } from '../shared/logger';
+ 5
+ 6  const SESSION_EXPIRY_HOURS = 24;
+ 7
+ 8  export async function loginUser(email: string, password: string): Promise<User | null> {
+ 9    logger.info({ email }, 'Login attempt');
+10
+11    const user = await db.users.findOne({ where: { email } });
+12    if (!user) {
+13      logger.warn({ email }, 'User not found');
+14      return null;
+15    }
+16
+17    if (!user.isActive) {
+18      logger.warn({ email }, 'Inactive user login attempt');
+19      return null;
+20    }
+21
+22    // Validate the provided password against stored hash
+23    const isValid = validateCredentials(user, password);
+24    if (!isValid) {
+25      logger.warn({ email }, 'Invalid credentials');
+26      return null;
+27    }
+28
+29    await db.sessions.create({
+30      userId: user.id,
+31      expiresAt: new Date(Date.now() + SESSION_EXPIRY_HOURS * 3600 * 1000),
+32    });
+33
+34    logger.info({ userId: user.id }, 'Login successful');
+35    return user;
+36  }
+37
+38  async function validateCredentials(user: User, password: string): Promise<boolean> {
+39    const hash = await hashPassword(password);
+40    return comparePassword(hash, user.passwordHash);
+41  }
+
+Agent: I can see the bug. On line 23, `validateCredentials` is an `async` function (it uses `await hashPassword` internally), but the call on line 23 is missing the `await` keyword.
+
+Without `await`, `isValid` receives a `Promise<boolean>` object instead of the resolved boolean value. A non-null object is always truthy in JavaScript, so `!isValid` is always `false` — meaning the credential check is never enforced and any password is accepted.
+
+Let me apply the fix.
+
+[Tool: edit_file]
+Path: src/auth/login.ts
+---
+<<<<<<< SEARCH
+    // Validate the provided password against stored hash
+    const isValid = validateCredentials(user, password);
+=======
+    // Validate the provided password against stored hash
+    const isValid = await validateCredentials(user, password);
+>>>>>>> REPLACE
+
+Agent: The fix is applied. Here is a summary of what changed:
+
+- File: src/auth/login.ts, line 23
+- Before: `const isValid = validateCredentials(user, password);`
+- After:  `const isValid = await validateCredentials(user, password);`
+
+Because `validateCredentials` is declared `async` and internally awaits `hashPassword`, omitting `await` at the call site caused `isValid` to always be a resolved `Promise` object (truthy), bypassing the password check entirely.
+
+I recommend running the test suite now to confirm the fix and ensure no regression in the auth flow:
+
+```
+npm test -- --testPathPattern=src/auth
+```
