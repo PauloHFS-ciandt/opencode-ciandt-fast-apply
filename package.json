@@ -1,0 +1,43 @@
+{
+  "name": "opencode-ciandt-fast-apply",
+  "version": "1.0.0",
+  "description": "OpenCode plugin that merges code edits via CI&T Flow LLM Proxy using lazy markers — faster and more accurate than full-file rewrites",
+  "type": "module",
+  "main": "./src/index.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PauloHFS-ciandt/opencode-ciandt-fast-apply.git"
+  },
+  "homepage": "https://github.com/PauloHFS-ciandt/opencode-ciandt-fast-apply",
+  "bugs": {
+    "url": "https://github.com/PauloHFS-ciandt/opencode-ciandt-fast-apply/issues"
+  },
+  "author": {
+    "name": "Paulo Hernane",
+    "email": "paulohf@ciandt.com"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "fast-apply",
+    "code-editing",
+    "lazy-markers",
+    "ciandt",
+    "litellm",
+    "proxy"
+  ],
+  "files": [
+    "src/",
+    "benchmark.py",
+    "BENCHMARK.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
