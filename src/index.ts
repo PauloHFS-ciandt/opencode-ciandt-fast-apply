@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { tool } from "@opencode-ai/plugin"
 import { resolve, isAbsolute } from "path"
 import { existsSync } from "fs"
 import { readFile, writeFile } from "fs/promises"
@@ -101,116 +102,84 @@ async function callMergeModel(original: string, codeEdit: string, instructions: 
 export const FastApplyPlugin: Plugin = async () => {
   if (!ENABLED) return {}
 
-  return {
-    config: async (opencodeConfig: any) => {
-      opencodeConfig.tool ??= {}
-      opencodeConfig.tool["fast_apply"] = {
-        description: `Edit existing files using partial code snippets with "${EXISTING_CODE_MARKER}" markers.
-
-FORMAT — use "${EXISTING_CODE_MARKER}" to represent unchanged sections:
-${EXISTING_CODE_MARKER}
-FIRST_EDIT
-${EXISTING_CODE_MARKER}
-SECOND_EDIT
-${EXISTING_CODE_MARKER}
-
-RULES:
-- ALWAYS wrap changes with markers at start AND end (omitting markers DELETES surrounding code)
-- Include 1-2 unique context lines around each edit to anchor the location precisely
-- Write a specific 'instructions' param: "I am adding X to function Y" not "update code"
-- Preserve exact indentation
-- For deletions: show surrounding context, omit the deleted lines
-- Batch multiple edits to the same file in one call
-- Do NOT use this tool for new files — use write instead
-- Do NOT use this tool for tiny exact replacements — use edit instead`,
-        args: {
-          target_file: {
-            type: "string",
-            description: "Absolute or relative path to the file to modify",
-          },
-          instructions: {
-            type: "string",
-            description: "Brief first-person description of the change, e.g. 'I am adding error handling to the login function'",
-          },
-          code_edit: {
-            type: "string",
-            description: `Code changes with "${EXISTING_CODE_MARKER}" markers for unchanged sections`,
-          },
-        },
-        execute: async (args: any, context: any) => {
-          if (!API_KEY) {
-            return `Error: FLOW_API_KEY environment variable not set. fast_apply requires the CI&T proxy API key.\nSet it with: export FLOW_API_KEY="your-jwt-token"`
-          }
-
-          const agent = context?.agent ?? ""
-          if (READONLY_AGENTS.includes(agent)) {
-            return `Error: fast_apply is not available in ${agent} mode. Use this tool only from implementation agents.`
-          }
-
-          const { target_file, instructions, code_edit } = args as {
-            target_file: string
-            instructions: string
-            code_edit: string
-          }
-
-          const dir = context?.directory ?? process.cwd()
-          const filePath = isAbsolute(target_file) ? target_file : resolve(dir, target_file)
-
-          if (!existsSync(filePath)) {
-            return `Error: File not found: ${filePath}\nUse the write tool to create new files.`
-          }
-
-          const original = await readFile(filePath, "utf-8")
-          const normalizedEdit = stripMarkdownFences(code_edit)
-          const hasMarkers = normalizedEdit.includes(EXISTING_CODE_MARKER)
-          const originalLineCount = original.split("\n").length
-
-          if (!hasMarkers && originalLineCount > 10) {
-            return `Error: Missing "${EXISTING_CODE_MARKER}" markers in code_edit.\nFor files >10 lines, you MUST use markers to indicate unchanged sections.\nUse the native edit tool for small exact replacements.`
-          }
-
-          if (!hasMarkers && originalLineCount > 3) {
-            // Small file without markers — treat as full replacement
-          }
-
-          const startTime = Date.now()
-          let result: { content: string; tokensIn: number; tokensOut: number }
-
-          try {
-            result = await callMergeModel(original, normalizedEdit, instructions)
-          } catch (err: any) {
-            return `Error: Fast Apply merge failed: ${err.message}\nFallback: use the native edit tool to apply changes manually.`
-          }
-
-          const merged = result.content
-          const elapsed = Date.now() - startTime
-
-          if (!merged || merged.trim().length === 0) {
-            return `Error: Merge model returned empty output.\nFallback: use the native edit tool to apply changes manually.`
-          }
-
-          if (hasMarkers && detectMarkerLeakage(original, merged)) {
-            return `Error: Marker leakage detected — merge model left "${EXISTING_CODE_MARKER}" in output instead of expanding it.\nThe file was NOT modified.\nFallback: use the native edit tool to apply changes manually.`
-          }
-
-          if (hasMarkers) {
-            const trunc = detectCatastrophicTruncation(original, merged)
-            if (trunc.triggered) {
-              return `Error: Catastrophic truncation detected — merged file lost ${Math.round(trunc.charLoss * 100)}% characters and ${Math.round(trunc.lineLoss * 100)}% lines.\nOriginal: ${originalLineCount} lines (${original.length} chars)\nMerged: ${merged.split("\n").length} lines (${merged.length} chars)\nThe file was NOT modified.\nFallback: use the native edit tool to apply changes manually.`
-            }
-          }
-
-          await writeFile(filePath, merged, "utf-8")
-
-          const diff = computeDiff(original, merged)
-          stats.calls++
-          stats.filesEdited++
-          stats.tokensIn += result.tokensIn
-          stats.tokensOut += result.tokensOut
-
-          return `Applied edit to ${target_file} — +${diff.added}/-${diff.removed} lines | ${elapsed}ms | model: ${MODEL}`
-        },
+  const fastApplyTool = tool({
+    description: `Edit existing files using partial code snippets with "${EXISTING_CODE_MARKER}" markers. Prefer this over edit for files >30 lines with scattered changes. Use native edit for small exact replacements. Use write for new files.\n\nFORMAT:\n${EXISTING_CODE_MARKER}\nFIRST_EDIT\n${EXISTING_CODE_MARKER}\nSECOND_EDIT\n${EXISTING_CODE_MARKER}\n\nRULES: Always wrap changes with markers at start AND end. Include 1-2 context lines around each edit. Write specific instructions. Preserve indentation. Batch edits to same file.`,
+    args: {
+      target_file: tool.schema.string().describe("Absolute or relative path to the file to modify"),
+      instructions: tool.schema.string().describe("Brief first-person description of the change, e.g. 'I am adding error handling to the login function'"),
+      code_edit: tool.schema.string().describe(`Code changes with "${EXISTING_CODE_MARKER}" markers for unchanged sections`),
+    },
+    async execute(args, context) {
+      if (!API_KEY) {
+        return `Error: FLOW_API_KEY environment variable not set. fast_apply requires the CI&T proxy API key.\nSet it with: export FLOW_API_KEY="your-jwt-token"`
       }
+
+      const agent = context?.agent ?? ""
+      if (READONLY_AGENTS.includes(agent)) {
+        return `Error: fast_apply is not available in ${agent} mode. Use this tool only from implementation agents.`
+      }
+
+      const dir = context?.directory ?? process.cwd()
+      const filePath = isAbsolute(args.target_file) ? args.target_file : resolve(dir, args.target_file)
+
+      if (!existsSync(filePath)) {
+        return `Error: File not found: ${filePath}\nUse the write tool to create new files.`
+      }
+
+      const original = await readFile(filePath, "utf-8")
+      const normalizedEdit = stripMarkdownFences(args.code_edit)
+      const hasMarkers = normalizedEdit.includes(EXISTING_CODE_MARKER)
+      const originalLineCount = original.split("\n").length
+
+      if (!hasMarkers && originalLineCount > 10) {
+        return `Error: Missing "${EXISTING_CODE_MARKER}" markers in code_edit.\nFor files >10 lines, you MUST use markers to indicate unchanged sections.\nUse the native edit tool for small exact replacements.`
+      }
+
+      const startTime = Date.now()
+      let result: { content: string; tokensIn: number; tokensOut: number }
+
+      try {
+        result = await callMergeModel(original, normalizedEdit, args.instructions)
+      } catch (err: any) {
+        return `Error: Fast Apply merge failed: ${err.message}\nFallback: use the native edit tool to apply changes manually.`
+      }
+
+      const merged = result.content
+      const elapsed = Date.now() - startTime
+
+      if (!merged || merged.trim().length === 0) {
+        return `Error: Merge model returned empty output.\nFallback: use the native edit tool to apply changes manually.`
+      }
+
+      if (hasMarkers && detectMarkerLeakage(original, merged)) {
+        return `Error: Marker leakage detected — merge model left "${EXISTING_CODE_MARKER}" in output instead of expanding it.\nThe file was NOT modified.\nFallback: use the native edit tool to apply changes manually.`
+      }
+
+      if (hasMarkers) {
+        const trunc = detectCatastrophicTruncation(original, merged)
+        if (trunc.triggered) {
+          return `Error: Catastrophic truncation detected — merged file lost ${Math.round(trunc.charLoss * 100)}% characters and ${Math.round(trunc.lineLoss * 100)}% lines.\nOriginal: ${originalLineCount} lines (${original.length} chars)\nMerged: ${merged.split("\n").length} lines (${merged.length} chars)\nThe file was NOT modified.\nFallback: use the native edit tool to apply changes manually.`
+        }
+      }
+
+      await writeFile(filePath, merged, "utf-8")
+
+      const diff = computeDiff(original, merged)
+      stats.calls++
+      stats.filesEdited++
+      stats.tokensIn += result.tokensIn
+      stats.tokensOut += result.tokensOut
+
+      return `Applied edit to ${args.target_file} — +${diff.added}/-${diff.removed} lines | ${elapsed}ms | model: ${MODEL}`
+    },
+  })
+
+  return {
+    tool: {
+      fast_apply: fastApplyTool,
+    },
+
+    config: async (opencodeConfig: any) => {
 
       opencodeConfig.command ??= {}
       opencodeConfig.command["fast-apply"] = {
