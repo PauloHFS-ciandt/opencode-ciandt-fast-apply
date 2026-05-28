@@ -100,10 +100,6 @@ async function callMergeModel(original: string, codeEdit: string, instructions: 
 
 export const FastApplyPlugin: Plugin = async () => {
   if (!ENABLED) return {}
-  if (!API_KEY) {
-    console.warn("[fast-apply] FLOW_API_KEY not set — plugin disabled")
-    return {}
-  }
 
   return {
     config: async (opencodeConfig: any) => {
@@ -142,6 +138,10 @@ RULES:
           },
         },
         execute: async (args: any, context: any) => {
+          if (!API_KEY) {
+            return `Error: FLOW_API_KEY environment variable not set. fast_apply requires the CI&T proxy API key.\nSet it with: export FLOW_API_KEY="your-jwt-token"`
+          }
+
           const agent = context?.agent ?? ""
           if (READONLY_AGENTS.includes(agent)) {
             return `Error: fast_apply is not available in ${agent} mode. Use this tool only from implementation agents.`
